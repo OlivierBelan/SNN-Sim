@@ -22,6 +22,6 @@ python test_RL.py NES-evosax
 
 More parameters are available, check the test_RL.py/test_SL.py file for more information.
 
-To make a comparison a ANN runner is also available (made with pytorch), to run it, you need to uncomment "start_config_path = "./config/config_ann/SL/" in test_SL.py or test_RL.py and comment the other one "start_config_path = "./config/config_snn/SL/".
+To facilitate comparisons, an ANN runner built with PyTorch is also available. To use it, uncomment the line start_config_path = "./config/config_ann/SL/" in either test_SL.py or test_RL.py, and comment out the corresponding SNN configuration line start_config_path = "./config/config_snn/SL/"
     
 A more complete version with more algorithms and more examples is available at: https://github.com/OlivierBelan/Evo-Sim (mainly NeuroEvolution algorithms)
