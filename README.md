@@ -1,4 +1,4 @@
-A simple, efficient and cool Spiking Neural Network simulator made in python/cython (multi-threaded, work on cpu, gpu version coming very soon). It is designed to be easy to use and to be able to run on a wide range of problems, from supervised to reinforcement learning. Work well with NeuroEvolution algorithms (NEAT, CMA-ES, NES-evosax, etc...).
+(16/05/25) New Version is coming up (GPU compatible, new encoders/decoders, new methods)! A simple, efficient and cool Spiking Neural Network simulator made in python/cython (multi-threaded, work on cpu, gpu version coming very soon). It is designed to be easy to use and to be able to run on a wide range of problems, from supervised to reinforcement learning. Work well with NeuroEvolution algorithms (NEAT, CMA-ES, NES-evosax, etc...).
 
 A more detailed README is coming soon, but for now, here is a simple example of how to use it:
 
