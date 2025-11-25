@@ -10,9 +10,11 @@ import gymnasium as gym
 import numpy as np
 import numba as nb
 
-@nb.njit(cache=True, fastmath=False, nogil=True)
 def normalize_number(nb:float, max_value:float, min_value:float) -> float:
-    return (nb - min_value) / (max_value - min_value)
+    res = (nb - min_value) / (max_value - min_value)
+    if res > 1.0: return 1.0
+    if res < 0.0: return 0.0
+    return res
 
 class Car_Racing(Config_Problem):
     def __init__(self, name:str, config_path:str, nb_input:int=27648, nb_output:int=5, obs_max_init_value:float=5, obs_min_init_value:float=-5, termination_finess:float=None, auto_obersvation:bool=False, auto_obersvation_ratio:float=0.01) -> None:
@@ -30,15 +32,19 @@ class Car_Racing(Config_Problem):
             self.decoding_output_network_to_action, 
             self.fitness_step, 
             self.fitness_end,
-            self.update_observation_min_max
+            self.update_observation_min_max,
+            self.is_abs_update_observation
         )
     
-    @staticmethod
-    @nb.njit(cache=True, fastmath=False, nogil=True)
+    # @staticmethod
+    # @nb.njit(cache=True, fastmath=False, nogil=True)
     def encoding_observation_to_input_network(observation: np.ndarray, observation_max:np.ndarray, observation_min:np.ndarray) -> np.ndarray:
         observation_len:int = len(observation)
         observation = observation.flatten()
-        for i in nb.prange(observation_len):
+
+        # if self.auto_obersvation == True and self.is_scaling_update_observation == True: observation += (observation * self.observation_scaling)
+
+        for i in range(observation_len):
             observation[i] = normalize_number(observation[i], 255.0, 0.0)
         
         return observation
@@ -67,6 +73,7 @@ class Car_Racing(Config_Problem):
         observation_global_min_history:List[np.ndarray] = []
 
         episode_score:List[float] = []
+        fitnesses:dict = {"best_episode_raw_score": [], "mean_episode_raw_score": []}
 
         for genome in genomes.values():
             fitness_obj:Fitness = genome.fitness
@@ -76,8 +83,10 @@ class Car_Racing(Config_Problem):
             for episode in episodes:
                 fitness_obj.score += fitness_obj.extra_info[episode]
                 episode_score.append(fitness_obj.extra_info[episode])
-            genome.info["best_episode_raw_score"] = max(episode_score)
-            genome.info["mean_episode_raw_score"] = np.mean(episode_score).astype(float)
+            # genome.info["best_episode_raw_score"] = max(episode_score)
+            # genome.info["mean_episode_raw_score"] = np.mean(episode_score).astype(float)
+            fitnesses["best_episode_raw_score"].append(max(episode_score))
+            fitnesses["mean_episode_raw_score"].append(np.mean(episode_score).astype(float))
 
             # bis 2 - In case the observation is not known            
             observation_global_max_history.append(fitness_obj.extra_info["observation_max_history"])
@@ -90,8 +99,7 @@ class Car_Racing(Config_Problem):
         self.obersvation_stats(np.array(observation_global_max_history), np.array(observation_global_min_history), self.observation_max_global, self.observation_min_global, self.auto_obersvation_ratio)
         # print("obs_max found: ", np.round(self.observation_max_global, 4).tolist(), " obs_min found: ", np.round(self.observation_min_global, 4).tolist())
 
-
-        return self.observation_max_global, self.observation_min_global
+        return fitnesses, self.observation_max_global, self.observation_min_global
 
 
     # @staticmethod

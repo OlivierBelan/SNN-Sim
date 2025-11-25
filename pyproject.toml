@@ -1,0 +1,24 @@
+[project]
+name = "snn-sim"
+version = "0.1.0"
+description = "SNN runner"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "colorlog>=6.9.0",
+    "cython>=3.1.4",
+    "gymnasium[mujoco]>=1.2.1",
+    "matplotlib>=3.10.7",
+    "numba>=0.62.1",
+    "numpy>=2.3.3",
+    "opencv-python>=4.11.0.86",
+    "plotly>=6.3.1",
+    "pybullet>=3.2.7",
+    "pybullet-envs-gymnasium>=0.6.0",
+    "pygame>=2.6.1",
+    "ray[default]>=2.50.0",
+    "scikit-learn>=1.7.2",
+    "signal-slot-mp>=1.0.5",
+    "torch>=2.8.0",
+    "torchvision>=0.23.0",
+]
