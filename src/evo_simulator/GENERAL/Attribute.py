@@ -106,6 +106,21 @@ class Attribute_Paramaters:
         # print("self.min_synapse_parameters", self.min_synapse_parameters,'\n')
         # exit()
 
+        # Energy parameters (need to find a better way to do this later...)
+        self.is_energy:bool = False
+        if self.__config_all["Genome_NN"]["network_type"] == "SNN":
+            self.is_energy:bool = True if "energy" in self.__config_all["Runner_Info"]["neuron_model"] else False
+            self.is_energy_battery:bool = False
+            if self.is_energy == True:
+                self.energy_length:int = int(self.__config_all["Energy_Network"]["energy_length"])
+                if "energy" not in self.parameters_all_names: raise Exception("\"energy_neuron_parameter\" parameter not found in the config file")
+
+                self.is_energy_battery:bool = True if self.__config_all["Energy_Network"]["energy_battery"] == "True" else False
+                if self.is_energy_battery:
+                    if "energy_battery" not in self.parameters_all_names: raise Exception("\"energy_battery_neuron_parameter\" parameter not found in the config file")
+        # exit()
+
+
     def get_parameters_names(self, config:Dict[str, Any]):
         self.parameters_all_names:List[str] = []
         self.parameters_neuron_names:List[str] = []

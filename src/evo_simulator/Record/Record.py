@@ -10,6 +10,7 @@ import numpy as np
 class Record():
     def __init__(self, config_path:str, problem_name:str) -> None:
         self.config:Dict[str, Dict[str, Any]] = TOOLS.config_function(config_path, ["Record", "NEURO_EVOLUTION"])
+        problem_name:str = "[RUNNING]" + problem_name
         self.folder_name:str = self.__init_folder(problem_name)
         self.optimization_type:str = self.config["NEURO_EVOLUTION"]["optimization_type"] # maximize, minimize, closest_to_zero
         self.criterias:List[str] = self.config["Record"]["criteria"].split(" ")
@@ -24,17 +25,19 @@ class Record():
         # 1 - Build folder
         self.__build_folder(self.folder_name, 0)
         # 2 - Save config file in folder
-        shutil.copyfile(config_path, self.folder_path + "config")
+        shutil.copyfile(config_path, self.folder_path + "config.cfg")
 
 
-    def __init_folder(self, folder_name:str) -> str:
-        if os.path.exists("./results/" + folder_name):
+    def __init_folder(self, folder_name_running:str) -> str:
+        folder_name_done:str = folder_name_running.replace("[RUNNING]", "[DONE]")
+        folder_name_fail:str = folder_name_running.replace("[RUNNING]", "[FAIL]")
+        if os.path.exists("./results/" + folder_name_running) or os.path.exists("./results/" + folder_name_done) or os.path.exists("./results/" + folder_name_fail):
             i = 1
-            while os.path.exists("./results/" + folder_name + "_" + str(i)):
+            while os.path.exists("./results/" + folder_name_running + "_" + str(i)) or os.path.exists("./results/" + folder_name_done + "_" + str(i)) or os.path.exists("./results/" + folder_name_fail + "_" + str(i)):
                 i += 1
-            return folder_name + "_" + str(i)
+            return folder_name_running + "_" + str(i)
         else:
-            return folder_name
+            return folder_name_running
 
 
     def __build_folder(self, folder_name:str, run_nb:int) -> str:
@@ -111,3 +114,17 @@ class Record():
         with open(path, "rb") as f:
             genome:Genome_NN = pickle.load(f)
         return genome
+    
+    def end_run(self) -> None:
+        print("folder_path -> " + self.folder_path)
+        end_folder_name:str = self.folder_path.replace("[RUNNING]", "[DONE]")
+        print("End run -> " + end_folder_name)
+        if os.path.exists(self.folder_path):
+            os.rename(self.folder_path, end_folder_name)
+
+    def fail_run(self) -> None:
+        print("folder_path -> " + self.folder_path)
+        end_folder_name:str = self.folder_path.replace("[RUNNING]", "[FAIL]")
+        print("Fail run -> " + end_folder_name)
+        if os.path.exists(self.folder_path):
+            os.rename(self.folder_path, end_folder_name)

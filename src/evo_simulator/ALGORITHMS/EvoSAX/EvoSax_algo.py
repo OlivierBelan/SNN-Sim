@@ -1,147 +1,57 @@
 from evo_simulator.ALGORITHMS.Algorithm import Algorithm
 from evo_simulator.GENERAL.Genome import Genome_NN
-from evo_simulator.GENERAL.NN import NN
+from evo_simulator.GENERAL.Attribute import Attribute_Paramaters
 import evo_simulator.TOOLS as TOOLS
 from evo_simulator.GENERAL.Index_Manager import get_new_genome_id
 from evo_simulator.GENERAL.Population import Population_NN as Population
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Union
 import numpy as np
 import time
 
-import jax
-from evosax import OpenES
-from evosax import DE
-from evosax import ARS
-from evosax import SNES
-from evosax import PGPE
-from evosax import FitnessShaper
+from ALGORITHMS.EvoSAX.SNES_numpy import SNES_numpy
+from ALGORITHMS.EvoSAX.FitnessShaper_numpy import FitnessShaper
 
 
 class EvoSax_algo(Algorithm):
-    def __init__(self, config_path_file:str, algo_name:str) -> None:
-        Algorithm.__init__(self, config_path_file, algo_name)
+    def __init__(self, config_path_file:str, algo_name:str, attribute_mananger:Attribute_Paramaters, extra_info:Dict[Any, Any] = None) -> None:
+        Algorithm.__init__(self, config_path_file, algo_name, attribute_mananger, extra_info)
+
         # Initialize configs
         self.config_es:Dict[str, Dict[str, Any]] = TOOLS.config_function(config_path_file, [algo_name,"Genome_NN","NEURO_EVOLUTION", "Runner_Info"])
 
         self.pop_size:int = int(self.config_es[algo_name]["pop_size"])
         self.is_first_generation:bool = True
-        self.genome_core:Genome_NN = Genome_NN(-1, self.config_es["Genome_NN"], self.attributes_manager)
         self.verbose:bool = True if self.config_es[algo_name]["verbose"] == "True" else False
         self.optimization_type:str = self.config_es["NEURO_EVOLUTION"]["optimization_type"]
         self.algo_name:str = algo_name
-        self.is_neuron_param:bool = True if "bias" in self.attributes_manager.mu_parameters else False
-        self.network_type:str = self.config_es["Genome_NN"]["network_type"]
-        if self.network_type == "SNN":
-            self.decay_method:str = self.config_es["Runner_Info"]["decay_method"]
-        
-        
-        # Initialize es_algorithms
-        self.__init_es_jax(config_path_file=config_path_file)
- 
-    def __init_es_jax(self, config_path_file:str=None) -> None:
-        self.neuron_parameters_size:int = self.genome_core.nn.nb_neurons
-        self.synapse_parameters_size:int = self.genome_core.nn.synapses_actives_indexes[0].size
-
-        if self.is_neuron_param:
-            parameters_size:int = self.neuron_parameters_size + self.synapse_parameters_size
-        else:
-            parameters_size:int = self.synapse_parameters_size
+        self.config_path_file:str = config_path_file
+        self.generation:int = 0
+        return
 
 
-        self.jax_seed = jax.random.PRNGKey(np.random.randint(0, 100000))
-        if self.algo_name == "DE-evosax":
-            self.optimizer:DE = DE(popsize=self.pop_size, num_dims=parameters_size)
+    def __init_es(self, config_path_file:str=None) -> None:
 
-        elif self.algo_name == "NES-evosax":
-            self.optimizer:SNES = self.__init_snes(config_path_file, parameters_size)
+        self.optimizer:Union[SNES_numpy] = self.__init_snes(config_path_file, self.parameters_size)
 
-        elif self.algo_name == "ARS-evosax":
-            self.optimizer:ARS = self.__init_ars(config_path_file, parameters_size)
-
-        elif self.algo_name == "OpenES-evosax":
-            self.optimizer:OpenES = self.__init_openes(config_path_file, parameters_size)
-
-        elif self.algo_name == "PEPG-evosax":
-            self.optimizer:PGPE = self.__init_pepg(config_path_file, parameters_size)
-        else:
-            raise Exception("Algo name not found -> only available DE-evosax, NES-evosax, ARS-evosax, OpenES-evosax, PGPE-evosax")
 
         self.es_hyperparameters = self.optimizer.default_params
-        self.params_state = self.optimizer.initialize(self.jax_seed, self.es_hyperparameters)
-
+        self.params_state = self.optimizer.initialize(None, self.es_hyperparameters)
 
     def __init_snes(self, config_path_file:str, parameters_size:int):
-        config_snes:Dict[str, Any] = TOOLS.config_function(config_path_file, ["NES-evosax"])["NES-evosax"]
+        config_snes:Dict[str, Any] = TOOLS.config_function(config_path_file, ["NES"])["NES"]
         
-        self.optimizer:SNES = SNES(popsize=
-                                   self.pop_size, 
-                                   num_dims=parameters_size, 
-                                   sigma_init=float(config_snes["sigma_init"]), 
-                                   temperature=float(config_snes["temperature"]), 
-                                   mean_decay=float(config_snes["mean_decay"]))
-        return self.optimizer
+        self.optimizer:SNES_numpy = SNES_numpy(
+                                    popsize=self.pop_size, 
+                                    num_dims=parameters_size, 
 
-    def __init_ars(self, config_path_file:str, parameters_size:int):
-        config_ars:Dict[str, Any] = TOOLS.config_function(config_path_file, ["ARS-evosax"])["ARS-evosax"]
-        
-        self.optimizer:ARS = ARS(popsize=self.pop_size, 
-                                num_dims=parameters_size, 
-                                elite_ratio=float(config_ars["elite_ratio"]),
-                                opt_name=config_ars["optimizer"],
-                                 
-                                lrate_init=float(config_ars["learning_rate"]),
-                                lrate_decay=float(config_ars["learning_rate_decay"]),
-                                lrate_limit=float(config_ars["learning_rate_limit"]),
-                                 
-                                sigma_init=float(config_ars["sigma_init"]),
-                                sigma_decay=float(config_ars["sigma_decay"]),
-                                sigma_limit=float(config_ars["sigma_limit"]),
+                                    sigma_init=float(config_snes["sigma_init"]), 
+                                    mean_decay=float(config_snes["mean_decay"]),
 
-                                mean_decay=float(config_ars["mean_decay"]))
-        return self.optimizer
-
-    
-    def __init_openes(self, config_path_file:str, parameters_size:int):
-        config_openes:Dict[str, Any] = TOOLS.config_function(config_path_file, ["OpenES-evosax"])["OpenES-evosax"]
-
-        self.optimizer:OpenES = OpenES(popsize=self.pop_size,
-                                    num_dims=parameters_size,
-                                    opt_name=config_openes["opt_name"],
-                                    use_antithetic_sampling=True if config_openes["antithetic_sampling"] == "True" else False,
-                                    
-                                    lrate_init=float(config_openes["learning_rate"]),
-                                    lrate_decay=float(config_openes["learning_rate_decay"]),
-                                    lrate_limit=float(config_openes["learning_rate_limit"]),
-                                    
-                                    sigma_init=float(config_openes["sigma_init"]),
-                                    sigma_decay=float(config_openes["sigma_decay"]),
-                                    sigma_limit=float(config_openes["sigma_limit"]),
-                                    
-                                    mean_decay=float(config_openes["mean_decay"])
+                                    seed=None,
+                                    fitness_shaper=None
                                     )
+
         return self.optimizer
-        
-    def __init_pepg(self, config_path_file:str, parameters_size:int):
-        config_pepg:Dict[str, Any] = TOOLS.config_function(config_path_file, ["PEPG-evosax"])["PEPG-evosax"]
-
-        self.optimizer:PGPE = PGPE(popsize=self.pop_size,
-                                num_dims=parameters_size,
-                                elite_ratio=float(config_pepg["elite_ratio"]),
-                                opt_name=config_pepg["opt_name"],
-                                
-                                lrate_init=float(config_pepg["learning_rate"]),
-                                lrate_decay=float(config_pepg["learning_rate_decay"]),
-                                lrate_limit=float(config_pepg["learning_rate_limit"]),
-                                
-                                sigma_init=float(config_pepg["sigma_init"]),
-                                sigma_decay=float(config_pepg["sigma_decay"]),
-                                sigma_limit=float(config_pepg["sigma_limit"]),
-                                
-                                mean_decay=float(config_pepg["mean_decay"])
-                                )
-        return self.optimizer
-
-
 
     def run(self, global_population:Population) -> Population:
 
@@ -149,7 +59,9 @@ class EvoSax_algo(Algorithm):
         if self.is_first_generation == True: 
             start_time = time.time()
             self.__first_generation(self.population_manager)
-            self.__update_population_parameter_jax(self.population_manager)
+            self.population_manager.sync_genomes_to_population(is_sync_population_to_genome=True)
+            self.__update_population_parameter_population(self.population_manager)
+            self.population_manager.sync_population_to_genomes()
             global_population = self.population_manager
             print(self.name+": First generation time:", time.time() - start_time, "s")
             return global_population
@@ -157,69 +69,80 @@ class EvoSax_algo(Algorithm):
         # 1 - Update
         self.__update_es_by_fitness(self.population_manager)
 
+        self.generation += 1
+
         # 2 - Update population parameters
-        self.__update_population_parameter_jax(self.population_manager)
+        self.__update_population_parameter_population(self.population_manager)
 
         # 3 - Update population
         global_population.population = self.population_manager.population
 
         return global_population
-
             
     def __first_generation(self, population_manager:Population) -> None:
         self.is_first_generation = False
-        population:Dict[int, Genome_NN] = population_manager.population
-        parameters_names:List[str] = self.attributes_manager.mu_parameters.keys()
+        population_manager.first_generation()
 
-        while len(population) < self.pop_size:
-            new_genome:Genome_NN = Genome_NN(get_new_genome_id(), self.config_es["Genome_NN"], self.attributes_manager)
-            new_genome.nn.set_arbitrary_parameters(is_random=False, weight_random=True)
-            for param_name in parameters_names:
-                if param_name in new_genome.nn.parameters: # Parameters are set from the attributes_manager which contains information from your config file otherwise it will set by arbitrary values
-                    if param_name == "weight" or param_name == "delay": # synapses parameters
-                        new_genome.nn.parameters[param_name][new_genome.nn.synapses_actives_indexes] = TOOLS.epsilon_mu_sigma_jit(
-                                                                                        parameter=new_genome.nn.parameters[param_name][new_genome.nn.synapses_actives_indexes],  
-                                                                                        mu_parameter=self.attributes_manager.mu_parameters[param_name],
-                                                                                        sigma_paramater=self.attributes_manager.sigma_parameters[param_name],
-                                                                                        min=self.attributes_manager.min_parameters[param_name],
-                                                                                        max=self.attributes_manager.max_parameters[param_name],
-                        )
-                    else: # neuron parameters
-                        new_genome.nn.parameters[param_name] = TOOLS.epsilon_mu_sigma_jit(
-                                                                                        parameter=new_genome.nn.parameters[param_name],  
-                                                                                        mu_parameter=self.attributes_manager.mu_parameters[param_name],
-                                                                                        sigma_paramater=self.attributes_manager.sigma_parameters[param_name],
-                                                                                        min=self.attributes_manager.min_parameters[param_name],
-                                                                                        max=self.attributes_manager.max_parameters[param_name],
-                    )
-            population[new_genome.id] = new_genome
+        self.genome_core:Genome_NN = population_manager.genome_core
+
+        self.network_type = population_manager.network_type
+        self.neuron_params_names = population_manager.neuron_params_names
+        self.synapse_params_names = population_manager.synapse_params_names
+
+        self.neuron_parameters_size:int = population_manager.neuron_parameters_size
+        self.synapse_parameters_size:int = population_manager.synapse_parameters_size
+        self.layer_parameters_size:int = population_manager.layer_parameters_size
+        self.synapses_actives_indexes:np.ndarray = population_manager.synapses_actives_indexes
+
+        self.is_combinatorial_modulo = population_manager.is_combinatorial_modulo
+        self.is_action_dynamic_RL = population_manager.is_action_dynamic_RL_evolution
 
 
-    def __update_population_parameter_jax(self, population_manager:Population) -> None:
-        # 1 - Get parameters from CMA-ES algorithms
-        self.jax_seed, self.jax_seed_gen, self.jax_seed_eval = jax.random.split(self.jax_seed, 3)
-        self.population_parameters, self.state = self.optimizer.ask(self.jax_seed_gen, self.params_state, self.es_hyperparameters)
+        self.is_energy = population_manager.is_energy
+        if self.is_energy == True:
+            self.energy_length = population_manager.energy_length
+            self.energy_reset_value = population_manager.energy_reset_value
 
 
-        genomes_dict:Dict[int, Genome_NN] = population_manager.population
+        self.params_to_update = population_manager.params_to_update
+        self.parameters_size = population_manager.parameters_size
+        self.__init_es(config_path_file=self.config_path_file)
+        return
+
+    def __update_population_parameter_population(self, population_manager:Population) -> None:
+        # 1 - Get parameters algorithms
+        self.population_parameters_from_optimizer, self.state = self.optimizer.ask(None, self.params_state, self.es_hyperparameters)
+        
+        param_index:int = 0
+        sigma_index:int = 0
+        population_params:Dict[str, np.ndarray] = population_manager.parameters
+
         # 2 - Update parameters in the population
-        for index, genome in enumerate(genomes_dict.values()):
-            nn:NN = genome.nn
-            if nn.parameters["weight"].flags.writeable == False: # Can happen when the genome is from another thread (i.e in parallel computing)
-                nn.parameters["weight"] = nn.parameters["weight"].copy()
+        if self.is_combinatorial_modulo == True or self.is_action_dynamic_RL == True:
+            param_index, sigma_index = population_manager.update_modules(param_index, sigma_index, self.population_parameters_from_optimizer, self.state.sigma, self.generation)
 
-            # 2.2 Update network parameters
-            if self.network_type == "ANN" and self.is_neuron_param == True:
-                nn.parameters["weight"][nn.synapses_actives_indexes] = np.array(self.population_parameters[index][:self.synapse_parameters_size])
+        for param in self.params_to_update:
 
-                if nn.parameters["bias"].flags.writeable == False: nn.parameters["bias"] = nn.parameters["weight"].copy()
-                nn.parameters["bias"] = np.array(self.population_parameters[index][self.synapse_parameters_size:])  
-                
+            # 2.3 Update Neuron parameters
+            if param in self.neuron_params_names:
 
-            elif self.network_type == "SNN" or (self.network_type == "ANN" and self.is_neuron_param == False):
-                nn.parameters["weight"][nn.synapses_actives_indexes] = np.array(self.population_parameters[index])
+                if param == "energy":
+                    population_params[param][:,:,:] = self.population_parameters_from_optimizer[:, param_index:param_index+population_manager.energy_size].reshape(population_params[param].shape)
+                    param_index += population_manager.energy_size
 
-            
+                else: # neuron parameters
+                    population_params[param][:,:] = self.population_parameters_from_optimizer[:, param_index:param_index+population_manager.nb_neurons_population]
+                    param_index += self.neuron_parameters_size
+
+            # 2.4 Update Synapse parameters
+            elif param in self.synapse_params_names:
+                population_params[param][:, self.synapses_actives_indexes[0], self.synapses_actives_indexes[1]] = self.population_parameters_from_optimizer[:, param_index:param_index+self.synapse_parameters_size]
+                param_index += self.synapse_parameters_size
+
+
+        param_index *= self.pop_size
+        population_manager.sync_population_to_genomes()
+
     def __update_es_by_fitness(self, population_manager:Population) -> None:
         self.population_manager.update_info()
         genomes_dict:Dict[int, Genome_NN] = population_manager.population
@@ -232,13 +155,10 @@ class EvoSax_algo(Algorithm):
                         # centered_rank=True,
                         # z_score=True,
                         # w_decay=0.1,
-                        maximize=True if self.optimization_type == "maximize" else False,
+                        # maximize=True if self.optimization_type == "maximize" and isinstance(self.optimizer, PGPE_numpy) == False else False,
+                        maximize=True,
                         )
-        
-        fitnesses = fit_shaper.apply(self.population_parameters, fitnesses)
 
-        # print("elites_indexes", elites_indexes, "size", elites_indexes.size)
-        # print("fitnesses", fitnesses, "size", fitnesses.size)
-        # print("fitness_max:", fitnesses[elites_indexes[0]], "fitness_min:", fitnesses[elites_indexes[-1]])
+        fitnesses = fit_shaper.apply(self.population_parameters_from_optimizer, fitnesses)
 
-        self.params_state = self.optimizer.tell(self.population_parameters, fitnesses, self.params_state, self.es_hyperparameters)
+        self.params_state = self.optimizer.tell(self.population_parameters_from_optimizer, fitnesses, self.params_state, self.es_hyperparameters)

@@ -4,13 +4,18 @@ from evo_simulator.GENERAL.Genome import Genome_NN
 import numpy as np
 
 class Environment:
-    def __init__(self, env_name:str, encoding_observation_to_network_input_function:Callable, decoding_output_network_to_action_function:Callable, fitness_step_function:Callable, fitness_end_function:Callable = None, update_observation_min_max_function:Callable = None):
+    def __init__(self, env_name:str, encoding_observation_to_network_input_function:Callable, decoding_output_network_to_action_function:Callable, fitness_step_function:Callable, fitness_end_function:Callable = None, update_observation_min_max_function:Callable = None, update_action_min_max_function:Callable = None, render_function:Callable = None, update_action_min_max_render_function:Callable = None, close_function:Callable = None, plot_function:Callable = None):
         self.env_name:str = env_name
         self.encoding_observation_to_network_input_function:Callable = encoding_observation_to_network_input_function
         self.decoding_output_network_to_action_function:Callable = decoding_output_network_to_action_function
         self.fitness_step_function:Callable = fitness_step_function
         self.fitness_end_function:Callable = fitness_end_function
         self.update_observation_min_max_function:Callable = update_observation_min_max_function
+        self.update_action_min_max_function:Callable = update_action_min_max_function
+        self.update_action_min_max_render_function:Callable = update_action_min_max_render_function
+        self.render_function:Callable = render_function
+        self.close_function:Callable = close_function
+        self.plot_function:Callable = plot_function
         self.check_functions()
 
         self.id:int = None
@@ -33,7 +38,7 @@ class Environment:
         if self.fitness_step_function == None: raise Exception("The fitness_step_function function is not implemented")
         if self.fitness_end_function == None: raise Exception("The fitness_end_function function is not implemented")
 
-    def update(self, action, genome:Genome_NN, episode:int) -> bool:
+    def update(self, action, genome:Genome_NN, episode:int, generation:int=None) -> bool:
         '''
             Update the environment with the action and update the fitness object with the reward
             Return True if the episode is active, else False if the episode is terminated or truncated
@@ -61,11 +66,32 @@ class Environment:
         else:
             raise NotImplementedError("The fitness_end_function function is not implemented")
 
+    def rewards(self) -> float:
+        '''
+            Return the reward of the environment
+        '''
+        if self.reward is None: 
+            print("The reward is None")
+            return 0.0
+        return self.reward
+
+    def render(self):
+        if self.render_function is not None:
+            self.render_function()
+        else:
+            raise NotImplementedError
+
     def close(self):
-        raise NotImplementedError
+        if self.close_function is not None:
+            self.close_function()
+        else:
+            raise NotImplementedError
 
     def copy(self) -> "Environment":
         raise NotImplementedError
+    
+    def plot(self):
+        self.plot_function()
 
 class Environment_Manager:
     def __init__(self, environment_builer:Callable):
@@ -78,6 +104,7 @@ class Environment_Manager:
         self.input_size:int = environment_core.encoding_observation_to_network_input().shape[0]
         self.fitness_end_function:Callable = environment_core.fitness_end_function
         self.update_observation_min_max_function:Callable = environment_core.update_observation_min_max_function
+        self.update_action_min_max_function:Callable = environment_core.update_action_min_max_function
         del environment_core # Free to save a bit of memory (cause the environment_core is not used anymore and pybullet take a lot of memory)
         self.nb_episodes:int = 0
         self.nb_genomes:int = 0
@@ -138,17 +165,17 @@ class Environment_Manager:
         return observations_dict
 
 
-    def update_environments(self, genomes:Dict[int, Genome_NN], actions_dict:Dict[int, np.ndarray], episodes:List[int], output_indexes:np.ndarray=None) -> bool:
+    def update_environments(self, genomes:Dict[int, Genome_NN], actions_dict:Dict[int, np.ndarray], episodes:List[int], generation:int=None, output_indexes:np.ndarray=None) -> bool:
         is_active:int = 0
         for id, actions in actions_dict.items():
             for i in range(actions.shape[0]):
                 if output_indexes is not None: # For SNN only (cause actions dict contain spikes of all neurons, then we need to select only the output neurons spikes)
-                    is_active += self.envs_dict[id][i].update(actions[i][output_indexes], genomes[id], episodes[i])
+                    is_active += self.envs_dict[id][i].update(actions[i][output_indexes], genomes[id], episodes[i], generation)
                 else:
-                    is_active += self.envs_dict[id][i].update(actions[i], genomes[id], episodes[i])
+                    is_active += self.envs_dict[id][i].update(actions[i], genomes[id], episodes[i], generation)
         return is_active > 0 # Return True if at least one environment is active
         
-    def fitness_end(self, genomes:Dict[int, Genome_NN], episodes:List[int]) -> Tuple[np.ndarray, np.ndarray]:
+    def fitness_end(self, genomes:Dict[int, Genome_NN], episodes:List[int]) -> Tuple[Dict[str, np.ndarray], np.ndarray, np.ndarray]:
         if self.fitness_end_function is not None:
             return self.fitness_end_function(genomes, episodes)
         else:
@@ -157,6 +184,13 @@ class Environment_Manager:
     def update_observation_min_max(self, observation_max:np.ndarray, observation_min:np.ndarray) -> None:
         if self.update_observation_min_max_function is not None:
             self.update_observation_min_max_function(observation_max, observation_min)
+        else:
+            raise NotImplementedError("The update_observation_min_max_function function is not implemented")
+
+
+    def update_action_min_max(self, population:Dict[int, Genome_NN], extra_info:Dict[str, Any]) -> None:
+        if self.update_action_min_max_function is not None:
+            self.update_action_min_max_function(population, extra_info)
         else:
             raise NotImplementedError("The update_observation_min_max_function function is not implemented")
 
@@ -182,11 +216,29 @@ class Environment_Manager:
                 new_envs_dict[genomes_ids[index]] = envs_list
         return new_envs_dict
     
-    def create_new_env(self, id:int) -> Environment:
-        new_env:Environment = self.environement_builder.get_env()
+    def create_new_env(self, id:int, is_render=False) -> Environment:
+        new_env:Environment = self.environement_builder.get_env(is_render)
         new_env.id = id
         return new_env
     
+    def rewards(self) -> np.ndarray:
+        '''
+            Return the rewards of the environments
+        '''
+        rewards_array:np.ndarray = np.zeros((self.nb_episodes, len(self.envs_dict)), dtype=np.float32)
+        for i in range(self.nb_episodes):
+            for j, envs_list in enumerate(self.envs_dict.values()):
+                rewards_array[i, j] = envs_list[i].rewards()
+        return rewards_array
+    
+    def plot(self) -> None:
+        '''
+            Plot the environments
+        '''
+        for i in range(self.nb_episodes):
+            for j, envs_list in enumerate(self.envs_dict.values()):
+                envs_list[i].plot()
+
     def __split_2(self, seq: List, num: int) -> List[List]:
         if num <= 0:
             raise ValueError("Number of chunks should be greater than 0")

@@ -50,6 +50,28 @@ class Fitness_Manager:
         accuracy:float = np.sum(output_network == output_ground) / output_ground.shape[0]
         return accuracy
 
+    def deterministic_neuron_output_accuracy_numerical_pop(output_network:np.ndarray, output_ground:np.ndarray) -> float:
+        '''
+            Return the output of the network by taking the neuron with the highest output
+        '''
+        output_network = np.argmax(output_network, axis=2)
+        accuracy:float = np.sum(output_network == output_ground, axis=1) / output_ground.shape[0]
+        return accuracy
+
+    @staticmethod
+    def Mean_squared_Error(output_network:np.ndarray, output_ground:np.ndarray) -> float:
+        '''
+            Return the mean squared error of the network
+        '''
+        print("output_network", output_network, output_network.shape)
+        # print("output_ground", output_ground, output_ground.shape)
+        exit("from Mean_squared_Error in Fitness.py")
+        output_network = np.argmax(output_network, axis=1)
+        output_ground = np.argmax(output_ground, axis=1)
+        mse:float = np.sum((output_network - output_ground) ** 2) / output_ground.shape[0]
+        return mse
+
+    
     @staticmethod
     @nb.njit(cache=True, fastmath=True, nogil=True)
     def deterministic_neuron_output_accuracy_spikes(output_indexes:np.ndarray, neurons_output:np.ndarray, output_ground:np.ndarray) -> float:
